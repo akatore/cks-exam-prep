@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CKS Exam Simulation Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Chosen Palette: Warm Stone & Teal -->
+    <!-- Application Structure Plan: 
+         The app is structured as a Learning Dashboard. 
+         - Sidebar Navigation: Allows users to jump between the 6 CKS Domains and the Overview Dashboard.
+         - Dashboard View: Provides a high-level summary of the exam content distribution and the user's study progress using Chart.js.
+         - Domain/Question Views: Displays the questions grouped by domain. 
+           - Interactive 'Flashcard' style: Users see Context/Task first. 
+           - 'Reveal Solution' toggle: Encourages active recall before seeing the answer.
+           - 'Mark as Mastered' checkbox: Updates the local state and the dashboard progress chart.
+         - Rationale: This structure mirrors a real study environment where tracking progress and focusing on specific weak domains is key.
+    -->
+    
+    <!-- Visualization & Content Choices:
+         - Overview Doughnut Chart: Goal: Inform user of progress. Interaction: Dynamic update on checking boxes. Justification: Quick visual feedback on mastery. Library: Chart.js.
+         - Domain Distribution Bar Chart: Goal: Inform user of exam weight/question count. Library: Chart.js.
+         - Code Blocks: Goal: Present YAML/Bash solutions clearly. Interaction: None (static display). Justification: Essential for technical exam prep.
+         - Interactive Questions: Goal: Active Learning. Method: DOM manipulation (hidden/visible classes) for solutions.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fafaf9; /* Stone-50 */
+            color: #1c1917; /* Stone-900 */
+        }
+        
+        /* Custom Scrollbar for code blocks */
+        .code-block::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .code-block::-webkit-scrollbar-track {
+            background: #292524;
+        }
+        .code-block::-webkit-scrollbar-thumb {
+            background: #57534e;
+            border-radius: 4px;
+        }
+
+        /* Chart Container Styling Rules */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Constrain max width */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .nav-item.active {
+            background-color: #0d9488; /* Teal-600 */
+            color: white;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- Mobile Header -->
+    <header class="md:hidden bg-stone-900 text-white p-4 flex justify-between items-center z-20">
+        <h1 class="text-xl font-bold tracking-tight">CKS Sim Suite</h1>
+        <button id="mobile-menu-btn" class="text-gray-300 hover:text-white focus:outline-none">
+            <i class="fas fa-bars text-2xl"></i>
+        </button>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="bg-stone-900 text-stone-300 w-full md:w-64 flex-shrink-0 flex flex-col transition-transform transform -translate-x-full md:translate-x-0 absolute md:relative z-10 h-full md:h-auto">
+        <div class="p-6 border-b border-stone-700 hidden md:block">
+            <h1 class="text-2xl font-bold text-white tracking-wider">CKS <span class="text-teal-500">Sim</span></h1>
+            <p class="text-xs text-stone-500 mt-1">Exam Preparation Suite</p>
+        </div>
+        
+        <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+            <button onclick="renderDashboard()" id="nav-dashboard" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-chart-pie w-5 text-center"></i> Dashboard
+            </button>
+            
+            <div class="px-4 pt-4 pb-2 text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                Exam Domains
+            </div>
+
+            <button onclick="renderDomain(1)" id="nav-domain-1" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-server w-5 text-center"></i> Cluster Setup
+            </button>
+            <button onclick="renderDomain(2)" id="nav-domain-2" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-shield-alt w-5 text-center"></i> Cluster Hardening
+            </button>
+            <button onclick="renderDomain(3)" id="nav-domain-3" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-lock w-5 text-center"></i> System Hardening
+            </button>
+            <button onclick="renderDomain(4)" id="nav-domain-4" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-bug w-5 text-center"></i> Microservices
+            </button>
+            <button onclick="renderDomain(5)" id="nav-domain-5" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-truck-loading w-5 text-center"></i> Supply Chain
+            </button>
+            <button onclick="renderDomain(6)" id="nav-domain-6" class="nav-item w-full text-left px-4 py-3 rounded-lg hover:bg-stone-800 hover:text-white transition-colors flex items-center gap-3">
+                <i class="fas fa-eye w-5 text-center"></i> Monitoring & Runtime
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-stone-700">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-xs">U</div>
+                <div>
+                    <p class="text-sm font-medium text-white">User Session</p>
+                    <p class="text-xs text-stone-500">Progress Saved Locally</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto bg-stone-50 p-4 md:p-8" id="main-content">
+        <!-- Content injected via JS -->
+    </main>
+
+    <script>
+        // --- Data Source ---
+        const cksData = [
+            {
+                id: 1,
+                domain: "Cluster Setup",
+                domainId: 1,
+                title: "CIS Benchmark Hardening",
+                context: "You need to improve the security posture of the cluster by addressing CIS Benchmark failures.",
+                task: `
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Kubelet:</strong> Ensure <code>anonymous-auth</code> is set to <code>false</code> and <code>--authorization-mode</code> is NOT <code>AlwaysAllow</code> (Use <code>Webhook</code>).</li>
+                        <li><strong>Etcd:</strong> Ensure <code>--client-cert-auth</code> is set to <code>true</code>.</li>
+                        <li><strong>Action:</strong> Modify configuration files and restart necessary services.</li>
+                    </ul>`,
+                solution: `
+                    <p class="mb-2 font-semibold">Kubelet Configuration:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto mb-4"><code># /var/lib/kubelet/config.yaml
+authentication:
+  anonymous:
+    enabled: false  # Changed from true
+authorization:
+  mode: Webhook     # Changed from AlwaysAllow
+
+# Restart Service
+systemctl restart kubelet</code></pre>
+                    <p class="mb-2 font-semibold">Etcd Manifest:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># /etc/kubernetes/manifests/etcd.yaml
+spec:
+  containers:
+  - command:
+    - etcd
+    - --client-cert-auth=true  # Add/Update this flag</code></pre>`
+            },
+            {
+                id: 2,
+                domain: "Cluster Setup",
+                domainId: 1,
+                title: "Ingress with TLS",
+                context: "An application requires secure external access.",
+                task: `Create an Ingress resource named <code>web-secure</code> in namespace <code>prod</code> routing <code>web.k8s.local</code> to service <code>web</code> (port 80). Configure <strong>TLS termination</strong> using secret <code>web-cert</code> and ensure HTTP to HTTPS redirect.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-secure
+  namespace: prod
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - web.k8s.local
+    secretName: web-cert
+  rules:
+  - host: web.k8s.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80</code></pre>`
+            },
+            {
+                id: 3,
+                domain: "Cluster Setup",
+                domainId: 1,
+                title: "Network Policies",
+                context: "Strictly control traffic between namespaces.",
+                task: `
+                    <ol class="list-decimal pl-5 space-y-1">
+                        <li><strong>Deny All:</strong> Create policy <code>deny-all</code> in <code>prod</code> blocking ALL ingress.</li>
+                        <li><strong>Allow Specific:</strong> Create policy <code>allow-prod</code> in <code>data</code> allowing ingress ONLY from pods in <code>prod</code>.</li>
+                    </ol>`,
+                solution: `
+                    <p class="mb-1 font-semibold">1. Deny All (prod):</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto mb-3"><code>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: prod
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress: [] # Empty list denies all</code></pre>
+                    <p class="mb-1 font-semibold">2. Allow Prod (data):</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prod
+  namespace: data
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          env: prod</code></pre>`
+            },
+            {
+                id: 4,
+                domain: "Cluster Hardening",
+                domainId: 2,
+                title: "Secure API Server",
+                context: "The cluster API server has weak settings.",
+                task: `Configure <code>kube-apiserver</code> to disable <code>anonymous-auth</code>, use <code>Node,RBAC</code> auth mode, and enable <code>NodeRestriction</code>. Remove <code>system:anonymous</code> ClusterRoleBinding.`,
+                solution: `
+                    <p class="mb-1 font-semibold">/etc/kubernetes/manifests/kube-apiserver.yaml</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto mb-3"><code>- --anonymous-auth=false
+- --authorization-mode=Node,RBAC
+- --enable-admission-plugins=...,NodeRestriction</code></pre>
+                    <p class="mb-1 font-semibold">Clean up:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>kubectl delete clusterrolebinding system:anonymous</code></pre>`
+            },
+            {
+                id: 5,
+                domain: "Cluster Hardening",
+                domainId: 2,
+                title: "Node Upgrade",
+                context: "Worker node <code>compute-0</code> is running an older Kubernetes version.",
+                task: `Upgrade <code>compute-0</code> to match control plane. Ensure safe draining and uncordoning.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># On Control Plane
+kubectl drain compute-0 --ignore-daemonsets
+
+# On Worker Node
+ssh compute-0
+sudo apt-get update
+sudo apt-get install -y kubeadm=1.28.x-00
+sudo kubeadm upgrade node
+sudo apt-get install -y kubelet=1.28.x-00 kubectl=1.28.x-00
+sudo systemctl restart kubelet
+exit
+
+# On Control Plane
+kubectl uncordon compute-0</code></pre>`
+            },
+            {
+                id: 6,
+                domain: "Cluster Hardening",
+                domainId: 2,
+                title: "Service Account Token Mounting",
+                context: "Deployment <code>stats-monitor</code> needs manual token management.",
+                task: `
+                    <ul class="list-disc pl-5">
+                        <li><strong>SA <code>stats-monitor-sa</code>:</strong> Disable <code>automountServiceAccountToken</code>.</li>
+                        <li><strong>Deployment:</strong> Mount token via Projected Volume at <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>.</li>
+                    </ul>`,
+                solution: `
+                    <p class="mb-1 font-semibold">Service Account:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto mb-3"><code>automountServiceAccountToken: false</code></pre>
+                    <p class="mb-1 font-semibold">Deployment Volume:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>volumes:
+- name: token-vol
+  projected:
+    sources:
+    - serviceAccountToken:
+        path: token
+        expirationSeconds: 3600</code></pre>`
+            },
+            {
+                id: 7,
+                domain: "System Hardening",
+                domainId: 3,
+                title: "Minimize IAM Roles (Docker)",
+                context: "User <code>developer</code> has excessive privileges.",
+                task: `Remove <code>developer</code> from <code>docker</code> group. Ensure <code>/var/run/docker.sock</code> is owned by root:root. Disable Docker TCP listener.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># Remove user
+sudo gpasswd -d developer docker
+
+# Fix permissions
+sudo chown root:root /var/run/docker.sock
+
+# Edit /lib/systemd/system/docker.service
+# Remove "-H tcp://0.0.0.0:2375" from ExecStart
+
+# Reload
+sudo systemctl daemon-reload
+sudo systemctl restart docker</code></pre>`
+            },
+            {
+                id: 8,
+                domain: "System Hardening",
+                domainId: 3,
+                title: "AppArmor / Security Context",
+                context: "Harden the <code>lamp</code> deployment.",
+                task: `Update containers to run as User ID 20000, use Read-Only Root Filesystem, and disallow Privilege Escalation.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>spec:
+  containers:
+  - name: lamp
+    securityContext:
+      runAsUser: 20000
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false</code></pre>`
+            },
+            {
+                id: 9,
+                domain: "Microservice Vulnerabilities",
+                domainId: 4,
+                title: "Pod Security Standards (PSS)",
+                context: "Namespace <code>confidential</code> enforces 'Restricted' PSS.",
+                task: `Fix <code>nginx-unprivileged</code> deployment to comply (drop ALL caps, non-root, RuntimeDefault seccomp).`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>securityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  capabilities:
+    drop:
+    - ALL</code></pre>`
+            },
+            {
+                id: 10,
+                domain: "Microservice Vulnerabilities",
+                domainId: 4,
+                title: "ImagePolicyWebhook",
+                context: "Integrate an external image scanner.",
+                task: `Configure API server to use <code>ImagePolicyWebhook</code> pointing to <code>/etc/kubernetes/bouncer/admission_configuration.yaml</code>. Backend config: <code>https://smooth-yak.local/review</code>. Fail closed.`,
+                solution: `
+                    <p class="mb-1 font-semibold">API Server Flags:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto mb-3"><code>--enable-admission-plugins=...,ImagePolicyWebhook
+--admission-control-config-file=/etc/kubernetes/bouncer/admission_configuration.yaml</code></pre>
+                    <p class="mb-1 font-semibold">Admission Config:</p>
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>defaultAllow: false
+kubeConfigFile: /etc/kubernetes/bouncer/kube-config.yaml</code></pre>`
+            },
+            {
+                id: 11,
+                domain: "Microservice Vulnerabilities",
+                domainId: 4,
+                title: "Pod-to-Pod Encryption (Istio)",
+                context: "Namespace <code>mtls</code> requires encrypted transport.",
+                task: `Enable Istio sidecar injection for <code>mtls</code> namespace. Enforce <strong>Strict mTLS</strong>.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># Enable Injection
+kubectl label ns mtls istio-injection=enabled
+
+# Enforce Strict mTLS (YAML)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: mtls
+spec:
+  mtls:
+    mode: STRICT</code></pre>`
+            },
+            {
+                id: 12,
+                domain: "Microservice Vulnerabilities",
+                domainId: 4,
+                title: "Kubernetes Secrets (TLS)",
+                context: "Deploy a certificate for a web server.",
+                task: `Create TLS secret <code>clever-cactus</code> in namespace <code>clever-cactus</code> using provided cert/key files.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>kubectl create secret tls clever-cactus \
+  --cert=/home/candidate/clever-cactus/web_k8s.local.crt \
+  --key=/home/candidate/clever-cactus/web_k8s.local.key \
+  -n clever-cactus</code></pre>`
+            },
+            {
+                id: 13,
+                domain: "Supply Chain Security",
+                domainId: 5,
+                title: "Dockerfile Best Practices",
+                context: "Analyze <code>~/subtle-bee/build/Dockerfile</code>.",
+                task: `Change <code>USER root</code> to <code>USER nobody</code>. Pin base image version (e.g., <code>ubuntu:20.04</code>). Do not build.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>FROM ubuntu:20.04  # Was latest
+
+# ... (install steps)
+
+USER nobody        # Was root</code></pre>`
+            },
+            {
+                id: 14,
+                domain: "Supply Chain Security",
+                domainId: 5,
+                title: "SBOM (Software Bill of Materials)",
+                context: "Identify vulnerable container via SBOM.",
+                task: `Identify container image with <code>libcrypto3</code>. Generate SPDX SBOM using <code>bom</code> tool. Remove container from deployment.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># Identify
+docker exec <id> apk list | grep libcrypto
+
+# Generate SBOM
+bom generate --image <image_name> --format spdx -o output.spdx
+
+# Edit Deployment
+kubectl edit deployment <name>
+# Remove the specific container block</code></pre>`
+            },
+            {
+                id: 15,
+                domain: "Monitoring & Runtime",
+                domainId: 6,
+                title: "Runtime Security (Falco)",
+                context: "Pod accessing <code>/dev/mem</code>.",
+                task: `Use Falco logs to identify compromised pod (e.g., <code>gpu-worker</code>). Scale deployment to 0.`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code># Check Logs
+grep "Error" /var/log/syslog | grep falco
+
+# Scale Down
+kubectl scale deploy gpu-worker --replicas=0</code></pre>`
+            },
+            {
+                id: 16,
+                domain: "Monitoring & Runtime",
+                domainId: 6,
+                title: "Audit Policy",
+                context: "Enable auditing with specific rules.",
+                task: `Enable auditing on API server. Create policy: Log namespaces (RequestResponse), deployments in webapps (Request), ConfigMaps/Secrets (Metadata).`,
+                solution: `
+                    <pre class="code-block bg-stone-800 text-stone-100 p-3 rounded text-sm overflow-x-auto"><code>rules:
+- level: RequestResponse
+  resources: [{group: "", resources: ["namespaces"]}]
+- level: Request
+  resources: [{group: "apps", resources: ["deployments"]}]
+  namespaces: ["webapps"]
+- level: Metadata
+  resources: [{group: "", resources: ["secrets", "configmaps"]}]
+- level: Metadata
+  omitStages: ["RequestReceived"]</code></pre>`
+            }
+        ];
+
+        // --- State Management ---
+        let completedQuestions = new Set();
+        let chartInstances = {};
+
+        // --- DOM Elements ---
+        const mainContent = document.getElementById('main-content');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDashboard();
+            updateNavState('nav-dashboard');
+        });
+
+        // --- Mobile Menu Toggle ---
+        mobileMenuBtn.addEventListener('click', () => {
+            const isClosed = sidebar.classList.contains('-translate-x-full');
+            if (isClosed) {
+                sidebar.classList.remove('-translate-x-full');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+            }
+        });
+
+        // --- Navigation Logic ---
+        function updateNavState(activeId) {
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('active', 'bg-stone-800', 'text-white');
+                el.classList.add('text-stone-300');
+            });
+            const activeEl = document.getElementById(activeId);
+            if (activeEl) {
+                activeEl.classList.add('active');
+                activeEl.classList.remove('text-stone-300');
+            }
+            // Close mobile menu on navigate
+            if (window.innerWidth < 768) {
+                sidebar.classList.add('-translate-x-full');
+            }
+        }
+
+        // --- Render Functions ---
+
+        function renderDashboard() {
+            updateNavState('nav-dashboard');
+            
+            const totalQs = cksData.length;
+            const completedCount = completedQuestions.size;
+            const progress = Math.round((completedCount / totalQs) * 100);
+
+            // Calculate Domain Data for charts
+            const domainCounts = {};
+            const domainMastery = {};
+            
+            cksData.forEach(q => {
+                domainCounts[q.domain] = (domainCounts[q.domain] || 0) + 1;
+                if (completedQuestions.has(q.id)) {
+                    domainMastery[q.domain] = (domainMastery[q.domain] || 0) + 1;
+                }
+            });
+
+            const labels = Object.keys(domainCounts);
+            const dataCounts = Object.values(domainCounts);
+            const dataMastery = labels.map(l => domainMastery[l] || 0);
+
+            mainContent.innerHTML = `
+                <div class="fade-in max-w-6xl mx-auto">
+                    <div class="mb-8">
+                        <h2 class="text-3xl font-bold text-stone-800">Exam Preparation Dashboard</h2>
+                        <p class="text-stone-600 mt-2">Track your progress across all 6 CKS domains. Use the sidebar to drill down into specific questions.</p>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+                            <div class="text-stone-500 text-sm font-medium uppercase tracking-wide">Total Questions</div>
+                            <div class="text-4xl font-bold text-stone-900 mt-2">${totalQs}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+                            <div class="text-stone-500 text-sm font-medium uppercase tracking-wide">Questions Mastered</div>
+                            <div class="text-4xl font-bold text-teal-600 mt-2">${completedCount}</div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+                            <div class="text-stone-500 text-sm font-medium uppercase tracking-wide">Overall Progress</div>
+                            <div class="text-4xl font-bold text-indigo-600 mt-2">${progress}%</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Area -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- Chart 1: Overall Progress -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+                            <h3 class="text-lg font-bold text-stone-800 mb-4 border-b border-stone-100 pb-2">Mastery Status</h3>
+                            <div class="chart-container">
+                                <canvas id="progressChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Chart 2: Domain Breakdown -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+                            <h3 class="text-lg font-bold text-stone-800 mb-4 border-b border-stone-100 pb-2">Domain Coverage</h3>
+                            <div class="chart-container">
+                                <canvas id="domainChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            initDashboardCharts(completedCount, totalQs, labels, dataCounts, dataMastery);
+        }
+
+        function initDashboardCharts(completed, total, labels, counts, mastery) {
+            // Destroy old charts if existing
+            if (chartInstances.progress) chartInstances.progress.destroy();
+            if (chartInstances.domain) chartInstances.domain.destroy();
+
+            // Progress Chart
+            const ctxProgress = document.getElementById('progressChart').getContext('2d');
+            chartInstances.progress = new Chart(ctxProgress, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Mastered', 'Pending'],
+                    datasets: [{
+                        data: [completed, total - completed],
+                        backgroundColor: ['#0d9488', '#e5e7eb'], // Teal-600, Gray-200
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Domain Chart
+            const ctxDomain = document.getElementById('domainChart').getContext('2d');
+            chartInstances.domain = new Chart(ctxDomain, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Total Questions',
+                            data: counts,
+                            backgroundColor: '#94a3b8', // Slate-400
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Mastered',
+                            data: mastery,
+                            backgroundColor: '#0d9488', // Teal-600
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                        x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 } }
+                    },
+                    plugins: {
+                        legend: { position: 'top' }
+                    }
+                }
+            });
+        }
+
+        function renderDomain(domainId) {
+            updateNavState(`nav-domain-${domainId}`);
+            
+            const domainQuestions = cksData.filter(q => q.domainId === domainId);
+            const domainName = domainQuestions[0].domain;
+
+            let html = `
+                <div class="fade-in max-w-4xl mx-auto pb-10">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-stone-800">${domainName}</h2>
+                            <p class="text-stone-500 text-sm mt-1">Found ${domainQuestions.length} scenario(s) in this domain.</p>
+                        </div>
+                        <span class="bg-stone-200 text-stone-600 px-3 py-1 rounded-full text-xs font-bold uppercase">Domain ${domainId}</span>
+                    </div>
+            `;
+
+            // Intro text per domain (simulating specific guidance)
+            const intros = {
+                1: "Focus on CIS benchmarks and secure ingress configuration. These are fundamental setup tasks.",
+                2: "Hardening involves reducing attack surface. Pay attention to user permissions and API server flags.",
+                3: "System hardening requires OS-level tweaks. Minimize privileges and restrict system calls using AppArmor.",
+                4: "Microservices are vulnerable. Use OPA/Webhooks for admission control and Istio for mTLS.",
+                5: "Secure your supply chain. Scrutinize Dockerfiles and use SBOMs to detect vulnerable packages.",
+                6: "Runtime security is your last line of defense. Use Falco for detection and Audit Logs for forensics."
+            };
+
+            html += `
+                <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-8 rounded-r">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-indigo-500"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-indigo-700 font-medium">Domain Strategy</p>
+                            <p class="text-sm text-indigo-600 mt-1">${intros[domainId]}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Render Questions
+            html += `<div class="space-y-6">`;
+            
+            domainQuestions.forEach((q, index) => {
+                const isChecked = completedQuestions.has(q.id) ? 'checked' : '';
+                
+                html += `
+                    <div class="bg-white rounded-xl shadow-md border border-stone-200 overflow-hidden transition-all hover:shadow-lg">
+                        <!-- Header -->
+                        <div class="bg-stone-50 p-4 border-b border-stone-100 flex justify-between items-start">
+                            <div class="flex gap-3">
+                                <div class="bg-stone-800 text-white w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
+                                    Q${index + 1}
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-bold text-stone-800 leading-tight">${q.title}</h3>
+                                    <p class="text-xs text-stone-500 mt-1 uppercase tracking-wide">ID: CKS-${q.id}</p>
+                                </div>
+                            </div>
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" class="w-5 h-5 text-teal-600 rounded focus:ring-teal-500 border-gray-300" 
+                                    onchange="toggleComplete(${q.id}, this)" ${isChecked}>
+                                <span class="text-sm font-medium text-stone-600">Mastered</span>
+                            </label>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <h4 class="text-sm font-bold text-stone-400 uppercase mb-2">Context</h4>
+                                <p class="text-stone-700">${q.context}</p>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h4 class="text-sm font-bold text-stone-400 uppercase mb-2">Task</h4>
+                                <div class="bg-red-50 border border-red-100 rounded-lg p-4 text-stone-800 text-sm">
+                                    ${q.task}
+                                </div>
+                            </div>
+
+                            <!-- Solution Section -->
+                            <div>
+                                <button onclick="toggleSolution(${q.id})" class="text-teal-600 hover:text-teal-700 font-medium text-sm flex items-center gap-2 focus:outline-none mb-3">
+                                    <i class="fas fa-eye" id="icon-${q.id}"></i> <span id="btn-text-${q.id}">Reveal Solution</span>
+                                </button>
+                                
+                                <div id="sol-${q.id}" class="hidden border-t border-stone-100 pt-4 mt-2 bg-stone-50 rounded-lg p-4">
+                                    <h4 class="text-sm font-bold text-teal-700 uppercase mb-3">Solution Guide</h4>
+                                    ${q.solution}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`; // Close grid and container
+            mainContent.innerHTML = html;
+        }
+
+        // --- Interaction Logic ---
+        
+        function toggleSolution(id) {
+            const solDiv = document.getElementById(`sol-${id}`);
+            const btnText = document.getElementById(`btn-text-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            
+            if (solDiv.classList.contains('hidden')) {
+                solDiv.classList.remove('hidden');
+                solDiv.classList.add('fade-in');
+                btnText.textContent = "Hide Solution";
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                solDiv.classList.add('hidden');
+                btnText.textContent = "Reveal Solution";
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function toggleComplete(id, checkbox) {
+            if (checkbox.checked) {
+                completedQuestions.add(id);
+            } else {
+                completedQuestions.delete(id);
+            }
+            // Optional: Save to localStorage here
+        }
+
+    </script>
+</body>
+</html>
