@@ -1,0 +1,30 @@
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+# Don't log requests to the following
+- level: None
+  resources:
+  - group: ""
+    resources: ["events"]
+
+# Log pod changes at RequestResponse level
+- level: RequestResponse
+  resources:
+  - group: ""
+    resources: ["pods"]
+
+# Log secret access at Metadata level
+- level: Metadata
+  resources:
+  - group: ""
+    resources: ["secrets", "configmaps"]
+
+# Log everything else at Request level
+- level: Request
+  omitStages:
+  - RequestReceived
+
+# Catch-all: log at Metadata level
+- level: Metadata
+  omitStages:
+  - RequestReceived

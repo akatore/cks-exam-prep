@@ -1,0 +1,29 @@
+# Custom Falco rule — detect curl/wget in containers
+# Place in /etc/falco/rules.d/custom-rules.yaml
+- rule: Detect curl or wget in container
+  desc: Detects the use of curl or wget inside a container (potential data exfiltration)
+  condition: >
+    spawned_process and
+    container and
+    (proc.name in (curl, wget))
+  output: >
+    curl/wget detected in container
+    (user=%user.name command=%proc.cmdline container_id=%container.id
+    container_name=%container.name image=%container.image.repository
+    namespace=%k8s.ns.name pod=%k8s.pod.name)
+  priority: WARNING
+  tags: [network, process, mitre_exfiltration]
+
+- rule: Detect shell spawned in container
+  desc: Detects an interactive shell started inside a container
+  condition: >
+    spawned_process and
+    container and
+    proc.name in (bash, sh, zsh, csh, dash)
+  output: >
+    Shell spawned in container
+    (user=%user.name shell=%proc.name container_id=%container.id
+    container_name=%container.name image=%container.image.repository
+    namespace=%k8s.ns.name pod=%k8s.pod.name)
+  priority: WARNING
+  tags: [shell, process, mitre_execution]

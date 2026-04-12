@@ -1,0 +1,18 @@
+# AppArmor — GA since Kubernetes v1.30
+# Profile must be loaded on the node: sudo apparmor_parser -q /etc/apparmor.d/my-profile
+apiVersion: v1
+kind: Pod
+metadata:
+  name: apparmor-pod
+  namespace: default
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27
+    securityContext:
+      appArmorProfile:
+        type: Localhost
+        localhostProfile: my-custom-profile
+      # Alternative — use the runtime default profile:
+      # appArmorProfile:
+      #   type: RuntimeDefault

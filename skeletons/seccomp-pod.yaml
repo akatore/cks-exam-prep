@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seccomp-pod
+  namespace: default
+spec:
+  securityContext:
+    seccompProfile:
+      type: Localhost
+      localhostProfile: profiles/my-profile.json
+      # Alternative — use the runtime default profile:
+      # type: RuntimeDefault
+  containers:
+  - name: app
+    image: nginx:1.27
+    securityContext:
+      allowPrivilegeEscalation: false
+# Seccomp profile file lives at:
+# /var/lib/kubelet/seccomp/profiles/my-profile.json
