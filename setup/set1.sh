@@ -124,3 +124,68 @@ echo "✅ Setup complete! The environment is ready for you to perform the tasks.
 echo "Current Pod status:"
 kubectl get pod nginx-pod -n default
 
+
+
+# ==============================================================================
+# Question 4 SETUP: Insecure API Server Configuration
+# ==============================================================================
+echo "Starting setup for Question 4..."
+echo "⚠️  WARNING: This script modifies the core API server manifest."
+
+# Ensure the script is run as root
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Please run as root (e.g., sudo ./setup-q4.sh)"
+  exit 1
+fi
+
+MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
+
+if [ ! -f "$MANIFEST" ]; then
+    echo "❌ Cannot find $MANIFEST. Are you sure you are on the Control Plane node?"
+    exit 1
+fi
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# 1. Create the rogue ClusterRoleBinding
+echo "[1/3] Creating rogue ClusterRoleBinding for 'system:anonymous'..."
+kubectl create clusterrolebinding system:anonymous-admin --clusterrole=cluster-admin --user=system:anonymous --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Modify the API Server manifest
+echo "[2/3] Modifying kube-apiserver.yaml to simulate the insecure state..."
+# Make a backup just in case
+cp $MANIFEST /root/kube-apiserver.yaml.backup
+
+# Change Auth Mode to AlwaysAllow
+sed -i 's/--authorization-mode=Node,RBAC/--authorization-mode=AlwaysAllow/g' $MANIFEST
+
+# Remove NodeRestriction from admission plugins
+sed -i 's/NodeRestriction,//g' $MANIFEST
+sed -i 's/,NodeRestriction//g' $MANIFEST
+
+# Force enable anonymous-auth if not present, or set to true if false
+if grep -q "anonymous-auth=false" $MANIFEST; then
+    sed -i 's/--anonymous-auth=false/--anonymous-auth=true/g' $MANIFEST
+elif ! grep -q "anonymous-auth" $MANIFEST; then
+    # Insert it right after authorization-mode
+    sed -i '/--authorization-mode/a \    - --anonymous-auth=true' $MANIFEST
+fi
+
+# 3. Wait for the API server to restart
+echo "[3/3] Waiting for kube-apiserver to restart with insecure settings..."
+sleep 5 # Give kubelet a moment to detect the file change
+
+# Loop until kubectl responds successfully again
+for i in {1..30}; do
+    if kubectl get nodes &> /dev/null; then
+        echo "✅ API server is back up!"
+        break
+    fi
+    echo "Waiting for API server to come back online... ($i/30)"
+    sleep 5
+done
+
+echo ""
+echo "✅ Setup complete! The cluster is now INSECURE."
+echo "You can verify the anonymous access by running:"
+echo "  kubectl get clusterrolebinding system:anonymous-admin"
