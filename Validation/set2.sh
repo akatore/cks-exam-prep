@@ -117,4 +117,73 @@ echo "==========================================================================
 
 # ... Future validations will be appended below ...
 
+# ==============================================================================
+# Question 3 VALIDATION: ServiceAccount Token Management
+# ==============================================================================
+echo "--- Q3 VALIDATION: ServiceAccount Token Management ---"
+Q3_SCORE=0
+Q3_TOTAL=3
+
+# 1. Check ServiceAccount automountServiceAccountToken
+SA_AUTOMOUNT=$(kubectl get sa default -n default -o jsonpath='{.automountServiceAccountToken}' 2>/dev/null)
+if [ "$SA_AUTOMOUNT" == "false" ]; then
+    echo -e "${GREEN}[PASS]${NC} Default ServiceAccount 'automountServiceAccountToken' is disabled."
+    ((Q3_SCORE++))
+else
+    echo -e "${RED}[FAIL]${NC} Default ServiceAccount 'automountServiceAccountToken' is not disabled. Found: ${SA_AUTOMOUNT:-true}"
+fi
+
+# 2. Check for the Secret
+# Iterating through secrets to find the correct type and annotation
+CUSTOM_SECRET=""
+for secret in $(kubectl get secrets -n default -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+    TYPE=$(kubectl get secret $secret -n default -o jsonpath='{.type}')
+    ANNOTATION=$(kubectl get secret $secret -n default -o jsonpath='{.metadata.annotations.kubernetes\.io/service-account\.name}' 2>/dev/null)
+    if [ "$TYPE" == "kubernetes.io/service-account-token" ] && [ "$ANNOTATION" == "default" ]; then
+        CUSTOM_SECRET=$secret
+        break
+    fi
+done
+
+if [ -n "$CUSTOM_SECRET" ]; then
+    echo -e "${GREEN}[PASS]${NC} Found ServiceAccount token Secret referencing the 'default' SA: $CUSTOM_SECRET"
+    ((Q3_SCORE++))
+else
+    echo -e "${RED}[FAIL]${NC} Could not find a Secret of type 'kubernetes.io/service-account-token' referencing the 'default' SA."
+fi
+
+# 3. Check Pod configuration
+POD_SA=$(kubectl get pod nginx-pod -n default -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null)
+
+# Check if the pod uses the custom secret in its volumes
+if [ -n "$CUSTOM_SECRET" ]; then
+    USES_SECRET=$(kubectl get pod nginx-pod -n default -o jsonpath="{.spec.volumes[*].secret.secretName}" 2>/dev/null | grep -c "$CUSTOM_SECRET")
+else
+    USES_SECRET=0
+fi
+
+# Check if it mounts at the correct path (if mounted at the dir, the token file exists at the required path)
+MOUNTS_PATH=$(kubectl get pod nginx-pod -n default -o jsonpath="{.spec.containers[0].volumeMounts[*].mountPath}" 2>/dev/null | grep -c "/var/run/secrets/kubernetes.io/serviceaccount")
+
+if [ "$POD_SA" == "default" ] && [ "$USES_SECRET" -gt 0 ] && [ "$MOUNTS_PATH" -gt 0 ]; then
+    echo -e "${GREEN}[PASS]${NC} Pod 'nginx-pod' uses SA 'default' and manually mounts the token Secret correctly."
+    ((Q3_SCORE++))
+else
+    echo -e "${RED}[FAIL]${NC} Pod 'nginx-pod' is not correctly configured."
+    echo "   -> Uses SA 'default': ${POD_SA:-NotFound}"
+    echo "   -> Mounts custom Secret: $(if [ "$USES_SECRET" -gt 0 ]; then echo "Yes"; else echo "No"; fi)"
+    echo "   -> Correct Mount Path: $(if [ "$MOUNTS_PATH" -gt 0 ]; then echo "Yes"; else echo "No"; fi)"
+fi
+
+# Q3 Result
+echo "------------------------------------------------------------------------------"
+if [ $Q3_SCORE -eq $Q3_TOTAL ]; then
+    echo -e "--> Q3 Result: ${GREEN}SUCCESS ($Q3_SCORE/$Q3_TOTAL)${NC}"
+else
+    echo -e "--> Q3 Result: ${RED}FAILED ($Q3_SCORE/$Q3_TOTAL)${NC}"
+fi
+echo "=============================================================================="
+
+# ... Future validations will be appended below ...
+
 echo "Validation complete!"
