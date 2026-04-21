@@ -187,3 +187,66 @@ echo "==========================================================================
 # ... Future validations will be appended below ...
 
 echo "Validation complete!"
+
+
+
+# ==============================================================================
+# Question 4 VALIDATION: Secure API Server
+# ==============================================================================
+echo "--- Q4 VALIDATION: Secure API Server ---"
+Q4_SCORE=0
+Q4_TOTAL=4
+
+MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
+KUBECONFIG_PATH="/etc/kubernetes/admin.conf"
+
+if [ -f "$MANIFEST" ]; then
+    # 1. Check Authorization Mode (Must include Node and RBAC)
+    if grep -q "\-\-authorization-mode=.*Node" "$MANIFEST" && grep -q "\-\-authorization-mode=.*RBAC" "$MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Authorization mode includes Node and RBAC."
+        ((Q4_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Authorization mode is missing Node or RBAC."
+    fi
+
+    # 2. Check Admission Controller (Must include NodeRestriction)
+    if grep -q "\-\-enable-admission-plugins=.*NodeRestriction" "$MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Admission plugins include NodeRestriction."
+        ((Q4_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Admission plugins do not include NodeRestriction."
+    fi
+
+    # 3. Check Anonymous Auth (Must be explicitly set to false)
+    if grep -q "\-\-anonymous-auth=false" "$MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Anonymous authentication is disabled."
+        ((Q4_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Anonymous authentication is not disabled (missing --anonymous-auth=false)."
+    fi
+else
+    echo -e "${RED}[FAIL]${NC} Could not find API Server manifest at $MANIFEST. Ensure you are running this on the control plane."
+fi
+
+# 4. Check ClusterRoleBinding for system:anonymous using the original kubeconfig
+ANON_BINDING=$(kubectl --kubeconfig="$KUBECONFIG_PATH" get clusterrolebindings -o custom-columns="NAME:.metadata.name,SUBJECT:.subjects[*].name" 2>/dev/null | grep "system:anonymous" | awk '{print $1}')
+
+if [ -z "$ANON_BINDING" ]; then
+    echo -e "${GREEN}[PASS]${NC} No ClusterRoleBinding found granting access to 'system:anonymous'."
+    ((Q4_SCORE++))
+else
+    echo -e "${RED}[FAIL]${NC} Found a ClusterRoleBinding granting access to 'system:anonymous': $ANON_BINDING"
+fi
+
+# Q4 Result
+echo "------------------------------------------------------------------------------"
+if [ $Q4_SCORE -eq $Q4_TOTAL ]; then
+    echo -e "--> Q4 Result: ${GREEN}SUCCESS ($Q4_SCORE/$Q4_TOTAL)${NC}"
+else
+    echo -e "--> Q4 Result: ${RED}FAILED ($Q4_SCORE/$Q4_TOTAL)${NC}"
+fi
+echo "=============================================================================="
+
+# ... Future validations will be appended below ...
+
+echo "Validation complete!"
