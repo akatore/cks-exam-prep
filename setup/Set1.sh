@@ -70,3 +70,18 @@ echo "Q1 Setup complete. The candidate must now load the profile on $WORKER_NODE
 # ... Future tasks will be appended below ...
 
 echo "All operations completed successfully!"
+
+# ==============================================================================
+# Question 2 SETUP: Default Deny NetworkPolicy
+# ==============================================================================
+echo "--- Q2 SETUP: Preparing NetworkPolicy environment ---"
+
+# Ensure the testing namespace exists
+echo "Creating namespace 'testing'..."
+kubectl create namespace testing --dry-run=client -o yaml | kubectl apply -f -
+
+echo "Q2 Setup complete. The candidate must now create the 'deny-all' NetworkPolicy in the 'testing' namespace."
+
+# ==============================================================================
+
+# ... Future tasks will be appended below ...
