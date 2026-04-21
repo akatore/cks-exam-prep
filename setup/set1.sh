@@ -85,9 +85,9 @@ echo "Q2 Setup complete. The candidate must now create the 'deny-all' NetworkPol
 # ==============================================================================
 
 # ==============================================================================
-# Question 2 SETUP: Default Deny NetworkPolicy
+# Question 3 SETUP: ServiceAccount Token Management
 # ==============================================================================
-echo "--- Q2 SETUP: Preparing NetworkPolicy environment ---"
+echo "--- Q3 SETUP: Preparing environment ---"
 
 
 echo "Starting setup for Question 3..."
@@ -124,4 +124,3 @@ echo "✅ Setup complete! The environment is ready for you to perform the tasks.
 echo "Current Pod status:"
 kubectl get pod nginx-pod -n default
 
-s
