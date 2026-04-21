@@ -250,3 +250,76 @@ echo "==========================================================================
 # ... Future validations will be appended below ...
 
 echo "Validation complete!"
+
+
+# ==============================================================================
+# Question 5 VALIDATION: Audit Logging
+# ==============================================================================
+echo "--- Q5 VALIDATION: Audit Logging ---"
+Q5_SCORE=0
+Q5_TOTAL=5
+
+MANIFEST="/etc/kubernetes/manifests/kube-apiserver.yaml"
+
+if [ -f "$MANIFEST" ]; then
+    # 1. Check API Server flags
+    if grep -q "\-\-audit-log-path=/var/log/kubernetes-logs.log" "$MANIFEST" && \
+       grep -q "\-\-audit-log-maxage=5" "$MANIFEST" && \
+       grep -q "\-\-audit-log-maxbackup=10" "$MANIFEST" && \
+       grep -q "\-\-audit-log-maxsize=100" "$MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Audit log path, maxage, maxbackup, and maxsize are correctly configured."
+        ((Q5_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Audit log flags (path, maxage, maxbackup, maxsize) are missing or incorrect."
+    fi
+    
+    # 2. Check if policy file is referenced and exists
+    # Extract the file path configured in the manifest
+    POLICY_FILE=$(grep -oP '(?<=--audit-policy-file=)[^\s]+' "$MANIFEST" | tr -d '"' | tr -d "'" | head -n 1)
+    
+    if [ -n "$POLICY_FILE" ] && [ -f "$POLICY_FILE" ]; then
+        echo -e "${GREEN}[PASS]${NC} Audit policy file is configured and exists at: $POLICY_FILE"
+        ((Q5_SCORE++))
+        
+        # 3. Check CronJob RequestResponse rule
+        if grep -qi "cronjobs" "$POLICY_FILE" && grep -qi "RequestResponse" "$POLICY_FILE"; then
+            echo -e "${GREEN}[PASS]${NC} Policy includes rule for CronJobs at RequestResponse level."
+            ((Q5_SCORE++))
+        else
+            echo -e "${RED}[FAIL]${NC} Policy missing rule for CronJobs at RequestResponse level."
+        fi
+        
+        # 4. Check Deployments in kube-system RequestResponse rule
+        if grep -qi "deployments" "$POLICY_FILE" && grep -qi "kube-system" "$POLICY_FILE"; then
+            echo -e "${GREEN}[PASS]${NC} Policy includes rule for Deployments in kube-system."
+            ((Q5_SCORE++))
+        else
+            echo -e "${RED}[FAIL]${NC} Policy missing rule for Deployments in kube-system namespace."
+        fi
+        
+        # 5. Check kube-proxy watch exclusion
+        if grep -qi "system:kube-proxy" "$POLICY_FILE" && grep -qi "watch" "$POLICY_FILE" && grep -qi "None" "$POLICY_FILE"; then
+            echo -e "${GREEN}[PASS]${NC} Policy includes exclusion (None) for kube-proxy watch requests."
+            ((Q5_SCORE++))
+        else
+            echo -e "${RED}[FAIL]${NC} Policy missing exclusion for kube-proxy watch requests on endpoints/services."
+        fi
+    else
+        echo -e "${RED}[FAIL]${NC} Audit policy file not configured in manifest or file does not exist."
+    fi
+else
+    echo -e "${RED}[FAIL]${NC} API Server manifest not found. Ensure this runs on the control plane."
+fi
+
+# Q5 Result
+echo "------------------------------------------------------------------------------"
+if [ $Q5_SCORE -eq $Q5_TOTAL ]; then
+    echo -e "--> Q5 Result: ${GREEN}SUCCESS ($Q5_SCORE/$Q5_TOTAL)${NC}"
+else
+    echo -e "--> Q5 Result: ${RED}FAILED ($Q5_SCORE/$Q5_TOTAL)${NC}"
+fi
+echo "=============================================================================="
+
+# ... Future validations will be appended below ...
+
+echo "Validation complete!"
