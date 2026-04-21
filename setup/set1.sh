@@ -84,4 +84,44 @@ echo "Q2 Setup complete. The candidate must now create the 'deny-all' NetworkPol
 
 # ==============================================================================
 
-# ... Future tasks will be appended below ...
+# ==============================================================================
+# Question 2 SETUP: Default Deny NetworkPolicy
+# ==============================================================================
+echo "--- Q2 SETUP: Preparing NetworkPolicy environment ---"
+
+
+echo "Starting setup for Question 3..."
+
+# 1. Reset the default ServiceAccount in the default namespace 
+# (Ensures automountServiceAccountToken is true or not explicitly disabled)
+echo "[1/3] Resetting the 'default' ServiceAccount..."
+kubectl patch serviceaccount default -n default -p '{"automountServiceAccountToken": true}'
+
+# 2. Clean up any existing pod from previous attempts
+echo "[2/3] Cleaning up any existing 'nginx-pod'..."
+kubectl delete pod nginx-pod -n default --ignore-not-found=true
+
+# 3. Create the initial nginx-pod
+echo "[3/3] Creating the initial 'nginx-pod'..."
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  namespace: default
+spec:
+  containers:
+  - name: nginx
+    image: nginx:stable-alpine
+EOF
+
+# Wait for the pod to be up and running
+echo "Waiting for nginx-pod to reach the Ready state..."
+kubectl wait --for=condition=Ready pod/nginx-pod -n default --timeout=60s
+
+echo ""
+echo "✅ Setup complete! The environment is ready for you to perform the tasks."
+echo "Current Pod status:"
+kubectl get pod nginx-pod -n default
+
+s
