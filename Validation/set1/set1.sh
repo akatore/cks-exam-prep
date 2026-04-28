@@ -323,3 +323,80 @@ echo "==========================================================================
 # ... Future validations will be appended below ...
 
 echo "Validation complete!"
+
+# ==============================================================================
+# Question 6 VALIDATION: Security Context & Dockerfile Best Practices
+# ==============================================================================
+# Define colors if they aren't already defined in your master script
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo "--- Q6 VALIDATION: Security Context & Dockerfile ---"
+Q6_SCORE=0
+Q6_TOTAL=4
+
+# Target files (Change these if your files have different names/paths)
+DOCKERFILE="./Dockerfile"
+POD_MANIFEST="./pod.yaml"
+
+# ------------------------------------------------------------------------------
+# Question 6: Dockerfile Validations
+# ------------------------------------------------------------------------------
+if [ -f "$DOCKERFILE" ]; then
+    # Issue 1: Prevent use of 'latest' tag
+    # Checks if the FROM line no longer ends in :latest
+    if ! grep -qE "^FROM .*:latest" "$DOCKERFILE"; then
+        echo -e "${GREEN}[PASS]${NC} Dockerfile base image does not use the 'latest' tag."
+        ((Q6_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Dockerfile base image is still using the 'latest' tag."
+    fi
+
+    # Issue 2: Prevent running as ROOT
+    # Checks if the USER line was changed to 5375 or test-user
+    if grep -qE "^USER (5375|test-user)" "$DOCKERFILE"; then
+        echo -e "${GREEN}[PASS]${NC} Dockerfile USER is correctly set to 5375 (or test-user)."
+        ((Q6_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Dockerfile USER is still ROOT or not correctly set to UID 5375."
+    fi
+else
+    echo -e "${RED}[FAIL]${NC} Dockerfile not found at $DOCKERFILE."
+fi
+
+# ------------------------------------------------------------------------------
+# Question 6: Pod Manifest Validations
+# ------------------------------------------------------------------------------
+if [ -f "$POD_MANIFEST" ]; then
+    # Issue 3: Container running as root (runAsUser: 0)
+    # Checks if runAsUser was updated to 5375 anywhere in the manifest
+    if grep -qE "runAsUser:\s*5375" "$POD_MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Pod manifest 'runAsUser' is correctly set to 5375."
+        ((Q6_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Pod manifest 'runAsUser' is still 0 or not correctly set to 5375."
+    fi
+
+    # Issue 4: Container running in privileged mode (privileged: true)
+    # Checks if privileged was changed to false
+    if grep -qE "privileged:\s*false" "$POD_MANIFEST"; then
+        echo -e "${GREEN}[PASS]${NC} Pod manifest 'privileged' flag is correctly set to false."
+        ((Q6_SCORE++))
+    else
+        echo -e "${RED}[FAIL]${NC} Pod manifest 'privileged' flag is still set to true."
+    fi
+else
+    echo -e "${RED}[FAIL]${NC} Pod manifest not found at $POD_MANIFEST."
+fi
+
+# ------------------------------------------------------------------------------
+# Q6 Result
+# ------------------------------------------------------------------------------
+echo "------------------------------------------------------------------------------"
+if [ $Q6_SCORE -eq $Q6_TOTAL ]; then
+    echo -e "--> Q6 Result: ${GREEN}SUCCESS ($Q6_SCORE/$Q6_TOTAL)${NC}"
+else
+    echo -e "--> Q6 Result: ${RED}FAILED ($Q6_SCORE/$Q6_TOTAL)${NC}"
+fi
+echo "=============================================================================="
